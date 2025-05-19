@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'fs'
 import https from 'https'
+import http from 'http'
 import dotenv from 'dotenv'
 import { OpenAI } from 'openai'
 import path from 'path'
@@ -16,12 +17,7 @@ dotenv.config()
 
 const app = express()
 const port = process.env.PORT || 3001
-
-// Load SSL certs created by mkcert
-const httpsOptions = {
-  key: fs.readFileSync(path.resolve(__dirname, '../MoodFi/localhost-key.pem')),
-  cert: fs.readFileSync(path.resolve(__dirname, '../MoodFi/localhost.pem')),
-}
+const isProduction = process.env.NODE_ENV === 'production'
 
 // Initialize OpenAI
 const openai = new OpenAI({
@@ -31,12 +27,15 @@ const openai = new OpenAI({
 // CORS config
 app.use(cors({
   origin: (origin, callback) => {
-    const allowedOrigins = [
-      'https://localhost:5173',
-      'https://localhost:5174',
-      'http://localhost:5173',
-      'http://localhost:5174',
-    ]
+    // In production, use environment variable for allowed origins
+    const allowedOrigins = isProduction && process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',') 
+      : [
+        'https://localhost:5173',
+        'https://localhost:5174',
+        'http://localhost:5173',
+        'http://localhost:5174',
+      ]
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true)
     } else {
@@ -250,12 +249,39 @@ app.get('/api/test', (req, res) => {
   res.status(200).json({ message: 'Server is working!' })
 })
 
-// Start HTTPS server
-https.createServer(httpsOptions, app).listen(port, () => {
-  console.log(`🚀 HTTPS Server running at https://localhost:${port}`)
-  console.log(`Health check: https://localhost:${port}/health`)
-  console.log(`Test endpoint: https://localhost:${port}/api/test`)
-})
+// Server startup logic - Handle both production and development environments
+if (isProduction) {
+  // In production (Render), use HTTP (Render handles SSL termination)
+  http.createServer(app).listen(port, () => {
+    console.log(`🚀 HTTP Server running in production mode at http://localhost:${port}`)
+    console.log(`Health check: http://localhost:${port}/health`)
+    console.log(`Test endpoint: http://localhost:${port}/api/test`)
+  })
+} else {
+  // In development, try to use HTTPS with SSL certificates
+  try {
+    const httpsOptions = {
+      key: fs.readFileSync(path.resolve(__dirname, '../MoodFi/localhost-key.pem')),
+      cert: fs.readFileSync(path.resolve(__dirname, '../MoodFi/localhost.pem')),
+    }
+    
+    // Start HTTPS server
+    https.createServer(httpsOptions, app).listen(port, () => {
+      console.log(`🚀 HTTPS Server running in development mode at https://localhost:${port}`)
+      console.log(`Health check: https://localhost:${port}/health`)
+      console.log(`Test endpoint: https://localhost:${port}/api/test`)
+    })
+  } catch (err) {
+    console.warn('⚠️ Failed to load SSL certificates, falling back to HTTP:', err.message)
+    
+    // Fall back to HTTP if SSL certs not available
+    http.createServer(app).listen(port, () => {
+      console.log(`🚀 HTTP Server running in development mode at http://localhost:${port}`)
+      console.log(`Health check: http://localhost:${port}/health`)
+      console.log(`Test endpoint: http://localhost:${port}/api/test`)
+    })
+  }
+}
 
 // Error handlers
 process.on('uncaughtException', (err) => {
