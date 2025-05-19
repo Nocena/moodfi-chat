@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: moodfi-chat-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://moodfi.app,https://www.moodfi.app
+    healthCheckPath: /health
