@@ -35,6 +35,7 @@ app.use(cors({
         'https://localhost:5174',
         'http://localhost:5173',
         'http://localhost:5174',
+        'https://mood-fi.vercel.app',
       ]
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true)
